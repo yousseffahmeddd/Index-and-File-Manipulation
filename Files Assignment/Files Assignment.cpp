@@ -1,7 +1,16 @@
 #include <iostream>
+#include <vector>
+#include <unordered_map>
+#include <string>
+#include <algorithm>
+#include "HealthCareSystem.h"
 
-int main()
-{
-    std::cout << "Hello World!\n";
+using namespace std;
+
+int main() {
+    HealthcareSystem system;
+    system.menu();
+    return 0;
 }
+
 
