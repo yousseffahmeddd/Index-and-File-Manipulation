@@ -8,9 +8,7 @@
 using namespace std;
 class HealthcareSystem {
 private:
-    vector<Doctor> doctors;
-    vector<Appointment> appointments;
-    vector<int> doctorAvailList;
+   vector<int> doctorAvailList;
     vector<int> appointmentAvailList;
 
     //maps Doctor ID to index in `doctors`
@@ -20,14 +18,78 @@ private:
     unordered_map<string, int> appointmentPrimaryIndex;
 
     //maps Doctor Name to doctor indexes
-    unordered_map<string, vector<int>> doctorSecondaryIndex;
+    unordered_map<string, vector<string>> doctorSecondaryIndex;
 
     //maps Doctor ID to appointment indexes
     unordered_map<string, vector<int>> doctorAppointmentIndex;
 
+    string doctorFile = "doctors.txt";        // Doctor data file
+    string appointmentFile = "appointments.tx t"; // Appointment data file
+
+// Helper function to mark a record as deleted
+    void markDeleted(const string& filePath, int position) {
+        fstream file(filePath, ios::in | ios::out);
+        if (!file) {
+            cerr << "Error opening file for deletion." << endl;
+            return;
+        }
+        file.seekp(position);
+        file.put('*'); // Marks the record as deleted
+        file.close();
+    }
+
+    int getAvailPosition(const string& filePath, vector<int>& availList) {
+        if (!availList.empty()) {
+            int position = availList.back();
+            availList.pop_back(); // Remove from avail list
+            return position;
+        } else {
+            fstream file(filePath, ios::app);
+            return file.tellp(); // If no available spots, append to the end of file
+        }
+    }
+
+
 public:
     void addDoctor() {
+        string id, name, address;
+        cout << "Enter Doctor ID: ";
+        cin >> id;
+
+        if (doctorPrimaryIndex.find(id) != doctorPrimaryIndex.end()) {
+            cout << "Doctor ID already exists. Aborting." << endl;
+            return;
+        }
+
+        cout << "Enter Doctor Name: ";
+        cin.ignore();
+        getline(cin, name);
+        cout << "Enter Doctor Address: ";
+        getline(cin, address);
+
+        Doctor doctor(id, name, address);
+
+        // Get available position from the avail list or append if none
+        int position = getAvailPosition(doctorFile, doctorAvailList);
+
+        fstream file(doctorFile, ios::in | ios::out);
+        if (!file) {
+            cerr << "Error opening doctor file." << endl;
+            return;
+        }
+
+        file.seekp(position, ios::beg); // Move to the available position
+        file << doctor.serialize();
+        file.close();
+
+        doctorPrimaryIndex[id] = position;
+
+        // Insert into secondary index (Doctor Name → Doctor ID)
+        doctorSecondaryIndex[name].push_back(id); // Corrected to use `id` as a string
+
+        cout << "Doctor added successfully." << endl;
     }
+
 
     void deleteDoctor() {
     }
