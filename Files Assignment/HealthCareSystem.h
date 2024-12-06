@@ -5,6 +5,7 @@
 #include <fstream>
 #include "Doctor.h"
 #include "Appointment.h"
+#include <algorithm>
 
 using namespace std;
 class HealthcareSystem {
@@ -14,7 +15,7 @@ private:
 
     //maps Doctor ID to index in `doctors`
     unordered_map<string, int> doctorPrimaryIndex;
-
+    
     //maps Appointment ID to index in `appointments`
     unordered_map<string, int> appointmentPrimaryIndex;
 
@@ -26,6 +27,9 @@ private:
 
     string doctorFile = "doctors.txt";        // Doctor data file
     string appointmentFile = "appointments.txt"; // Appointment data file
+    string doctorPriIndex = "doctorIndexFile.txt";
+    string appointment = "appointmentIndexFile.txt";
+    
 
 // Helper function to mark a record as deleted
     void markDeleted(const string& filePath, int position) {
@@ -50,12 +54,53 @@ private:
         }
     }
 
+    void loadPrimaryIndex(const string& indexFile, unordered_map<string, int>& indexMap) {
+        ifstream file(indexFile);
+        if (!file) {
+            cerr << "Error opening index file: " << indexFile << endl;
+            return;
+        }
+        indexMap.clear();
+        string id;
+        int position;
+        while (file >> id >> position) {
+            indexMap[id] = position;
+        }
+        file.close();
+    }
+
+    void savePrimaryIndex(const string& indexFile, const unordered_map<string, int>& indexMap) {
+        // Convert the unordered_map to a vector of pairs
+        vector<pair<string, int>> entries(indexMap.begin(), indexMap.end());
+
+        // Sort the vector by the key (ID) in lexicographical order
+        sort(entries.begin(), entries.end());
+
+        // Open the file for writing, truncating any existing content
+        ofstream file(indexFile, ios::trunc);
+        if (!file) {
+            cerr << "Error opening index file: " << indexFile << endl;
+            return;
+        }
+
+        // Write sorted entries to the file
+        for (const auto& entry : entries) {
+            file << entry.first << " " << entry.second << endl;
+        }
+        file.close();
+    }
+
+
+
 
 public:
     void addDoctor() {
         string id, name, address;
         cout << "Enter Doctor ID: ";
         cin >> id;
+
+        loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+
 
         if (doctorPrimaryIndex.find(id) != doctorPrimaryIndex.end()) {
             cout << "Doctor ID already exists. Aborting." << endl;
@@ -73,19 +118,20 @@ public:
         // Get available position or append
         int position = getAvailPosition(doctorFile, doctorAvailList);
 
-        // Open file in append mode
         ofstream file(doctorFile, ios::app);
         if (!file) {
             cerr << "Error opening doctor file." << endl;
             return;
         }
-
-        file.seekp(position, ios::beg); // Move to position
+        file.seekp(position, ios::beg);
         file << doctor.serialize();
         file.close();
 
-        // Update primary and secondary indices
+        // Update in-memory index and save to file
         doctorPrimaryIndex[id] = position;
+        savePrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+
+        // Update secondary index in memory
         doctorSecondaryIndex[name].push_back(id);
 
         cout << "Doctor added successfully." << endl;
@@ -104,6 +150,11 @@ public:
 
         cout << "Enter Appointment ID: ";
         cin >> id;
+
+        loadPrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
+        loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+
+
         if (appointmentPrimaryIndex.find(id) != appointmentPrimaryIndex.end()) {
             cout << "Appointment ID already exists." << endl;
             return;
@@ -114,8 +165,9 @@ public:
 
         cout << "Enter Doctor ID: ";
         cin >> doctorID;
+
         if (doctorPrimaryIndex.find(doctorID) == doctorPrimaryIndex.end()) {
-            cout << "Doctor ID does not exist. Aborting." << endl;
+            cout << "Doctor is not exists." << endl;
             return;
         }
 
@@ -124,7 +176,6 @@ public:
         // Get available position from the avail list or append if none
         int position = getAvailPosition(appointmentFile, appointmentAvailList);
 
-        // Open file in append mode
         ofstream file(appointmentFile, ios::app);
         if (!file) {
             cerr << "Error opening appointment file." << endl;
@@ -135,17 +186,18 @@ public:
         file << appointment.serialize();
         file.close();
 
-        // Update indices
+        // Update in-memory index and save to file
         appointmentPrimaryIndex[id] = position;
-        doctorAppointmentIndex[doctorID].push_back(position);
+        savePrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
 
         cout << "Appointment added successfully." << endl;
     }
 
-
     void updateAppointmentDate() {
-
+    
     }
+
+
 
     void deleteAppointment() {
 
@@ -230,7 +282,7 @@ public:
             case 8: printAppointmentInfo(); break;
             case 9: handleQueries(); break;
             case 10: cout << "Exiting system.\n"; break;
-            default: cout << "Invalid choice. Try again.\n";
+            default: cout << "Invalid choice. Try again.\n"; break;
             }
         } while (choice != 10);
     }
