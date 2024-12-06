@@ -13,7 +13,8 @@ public:
         : id(id), name(name), address(address) {}
 
     string serialize() {
-        return id + "|" + name + "|" + address + "\n";
+        int recordLength = id.length() + name.length() + address.length() + 2;
+        return to_string(recordLength) + id + "|" + name + "|" + address + "\n";
     }
 
     // Deserializes a string from file into a Doctor object
