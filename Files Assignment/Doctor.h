@@ -1,6 +1,9 @@
 #pragma once
-#include<iostream>
+#include <iostream>
+#include <sstream> // Include the sstream header
+
 using namespace std;
+
 class Doctor {
 public:
     string id;
