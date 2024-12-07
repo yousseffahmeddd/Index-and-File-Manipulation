@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <string>
 #include <vector>
 #include <unordered_map>
 #include <fstream>
@@ -116,16 +117,42 @@ public:
         cout << "Enter Doctor Address: ";
         getline(cin, address);
 
-        Doctor doctor(id, name, address);
-
         // Get available position or append
         int position = getAvailPosition(doctorFile, doctorAvailList);
 
-        ofstream file(doctorFile, ios::app);
+        fstream file("doctorIndexFile.txt", ios::in | ios::out);
         if (!file) {
             cerr << "Error opening doctor file." << endl;
             return;
         }
+        fstream docFile("doctors.txt", ios::in | ios::out);
+        if (!docFile) {
+            cerr << "Failed to open the file." << endl;
+            return;
+        }
+        // Get The Max Offset
+        vector<string> lines;
+        string line;
+        while (getline(file, line)) {  // Read each line
+            lines.push_back(line);
+        }
+        if (!lines.empty()) {
+            for (const auto& l : lines) {
+                int currNumber = stoi(l.substr(l.find(' ') + 1));
+                if (Doctor::cumulativeOffset < currNumber) {
+                    docFile.seekg(currNumber, ios::beg);
+                    string record;
+                    getline(docFile, record);
+                    Doctor::cumulativeOffset = currNumber + record.length() + 2;
+                }
+            }
+        }
+        docFile.close();
+        file.close();
+        //-------------------
+        
+        Doctor doctor(id, name, address);
+        file.open(doctorFile, ios::app);
         file.seekp(position, ios::beg);
         file << doctor.serialize();
         file.close();
@@ -139,7 +166,6 @@ public:
         doctorSecondaryIndex[name] = id;
         savePrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
         //----------
-
 
         cout << "Doctor added successfully." << endl;
     }
@@ -181,18 +207,49 @@ public:
         // new Added
         loadPrimaryIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
         //----------
-
-        Appointment appointment(id, date, doctorID);
-
+        
         // Get available position from the available list or append if none
         int position = getAvailPosition(appointmentFile, appointmentAvailList);
 
-        ofstream file(appointmentFile, ios::app);
+        fstream file("appointmentIndexFile.txt", ios::in | ios::out);
         if (!file) {
-            cerr << "Error opening appointment file." << endl;
+            cerr << "Failed to open the file." << endl;
             return;
         }
+        fstream appFile("appointments.txt", ios::in | ios::out);
+        if (!appFile) {
+            cerr << "Failed to open the file." << endl;
+            return;
+        }
+        
+        // Get The Max Offset
+        vector<string> lines;
+        string line;
+        while (getline(file, line)) {  // Read each line
+            lines.push_back(line);
+        }
 
+        for (int i = 0; i < lines.size(); ++i) {
+            cout << lines.at(i) << endl;
+        }
+
+        if (!lines.empty()) {
+            for (const auto& l : lines) {
+                int currNumber = stoi(l.substr(l.find(' ') + 1));
+                if (Appointment::cumulativeOffset < currNumber) {
+                    appFile.seekg(currNumber, ios::beg);
+                    string record;
+                    getline(appFile, record);
+                    Appointment::cumulativeOffset = currNumber + record.length() + 2;
+                }
+            }
+        }
+        appFile.close();
+        file.close();
+
+        Appointment appointment(id, date, doctorID);
+
+        file.open(appointmentFile, ios::app);
         file.seekp(position, ios::beg);
         file << appointment.serialize();  // Serialize and write the appointment to the file
         file.close();

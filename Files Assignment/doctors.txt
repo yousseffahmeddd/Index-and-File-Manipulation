@@ -1,5 +1,3 @@
-19D003|ahmed|12 haram
-21D001|mahmoud|16 dokki
-20D009|magdy|177 haram
-21D011|mazen|122 street
-
+14D001|Ali|Cairo
+15D002|Ahmed|Giza
+17D003|Youssef|Alex
