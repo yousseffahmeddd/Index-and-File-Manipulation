@@ -87,6 +87,38 @@ private:
         return -1;
     }
 
+    string binarySearch(const string& id, const string& indexFile, unordered_map<string, string>& indexMap) {
+        // Load the primary index
+        loadPrimaryIndex(indexFile, indexMap);
+
+        // Convert the unordered_map to a vector of pairs
+        vector<pair<string, string>> entries(indexMap.begin(), indexMap.end());
+
+        sort(entries.begin(), entries.end(), [](const pair<string, string>& a, const pair<string, string>& b) {
+            return a.second < b.second;
+        });
+
+        // Perform binary search
+        int low = 0;
+        int high = entries.size() - 1;
+
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+
+            if (entries[mid].second == id) {
+                return entries[mid].first;
+            }
+            else if (entries[mid].second < id) {
+                low = mid + 1;
+            }
+            else {
+                high = mid - 1;
+            }
+        }
+        return "";
+    }
+
+
     template <class T>
     void loadPrimaryIndex(const string& indexFile, unordered_map<string, T>& indexMap) {
         ifstream file(indexFile);
@@ -548,6 +580,17 @@ public:
             }
             else if (indexType.rfind("doctor name", 0) == 0) {
                 // DO Secondary Index ON Doctor Name 
+                string tName = query.substr(query.find("from") + 5);
+                string condition = query.substr(query.find('=') + 2);
+                
+
+                if (binarySearch(condition, "doctorSecondaryIndexFile.txt", doctorSecondaryIndex) != "") {
+                    cout << "Doctor Name: " << binarySearch(condition, "doctorSecondaryIndexFile.txt", doctorSecondaryIndex) << endl;
+                }
+                else {
+                    cout << "Doctor Not Exist!" << endl;
+                    return;
+                }
             }
             else if ((indexType.rfind("all", 0) == 0) || (indexType.rfind("*", 0) == 0)) {
                 // Get Table Name
@@ -578,6 +621,7 @@ public:
 
         int choice;
         do {
+            system("cls");
             cout << endl << "--- Healthcare Management System ---" << endl;
             cout << "1. Add New Doctor" << endl;
             cout << "2. Add New Appointment" << endl;
@@ -591,15 +635,17 @@ public:
             cout << "10. Exit" << endl;
             cout << "Enter your choice: ";
             cin >> choice;
+            system("cls");
             switch (choice) {
-            case 1: addDoctor(); break;
-            case 2: addAppointment(); break;
+            case 1: addDoctor(); system("pause"); break;
+            case 2: addAppointment(); system("pause"); break;
             case 3: {
                 string doctorId;
                 cout << "Enter Doctor ID to update doctor name: ";
                 cin >> doctorId;
 
 				updateDoctorName(doctorId);
+                system("pause");
 				break;
             }
             case 4: {
@@ -609,6 +655,7 @@ public:
 
                 // Call the function to print doctor info
                 updateAppointmentDate(appointmentId);
+                system("pause");
                 break;
             }
             case 5: {
@@ -619,6 +666,7 @@ public:
 
                 // Call the function to print doctor info
                 deleteDoctor(doctorId);
+                system("pause");
                 break;
             }
             case 6: deleteAppointment(); break;
@@ -630,6 +678,7 @@ public:
 
                 // Call the function to print doctor info
                 printDoctorInfo(doctorId);
+                system("pause");
                 break;
             }
             case 8: {
@@ -640,11 +689,12 @@ public:
 
                 // Call the function to print doctor info
                 printAppointmentInfo(appointmentId);
+                system("pause");
                 break;
             }
-            case 9: handleQueries(); break;
+            case 9: handleQueries(); system("pause"); break;
             case 10: cout << "Exiting system.\n"; break;
-            default: cout << "Invalid choice. Try again.\n"; break;
+            default: cout << "Invalid choice. Try again.\n"; system("pause"); break;
             }
         } while (choice != 10);
     }
