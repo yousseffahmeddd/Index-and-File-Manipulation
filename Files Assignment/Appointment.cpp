@@ -1,2 +1,2 @@
 #include "Appointment.h"
-int Appointment::cumulativeOffset = 0;
+int Appointment::cumulativeOffset = 2;
