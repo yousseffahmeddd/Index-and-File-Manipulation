@@ -8,12 +8,15 @@ public:
     string id;
     string name;
     string address;
+    int offset;
+    static int cumulativeOffset;
 
     Doctor(string id, string name, string address)
-        : id(id), name(name), address(address) {}
+        : id(id), name(name), address(address), offset(cumulativeOffset) {}
 
     string serialize() {
         int recordLength = id.length() + name.length() + address.length() + 2;
+        cumulativeOffset += recordLength + 2;
         return to_string(recordLength) + id + "|" + name + "|" + address + "\n";
     }
 

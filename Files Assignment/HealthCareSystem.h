@@ -131,7 +131,7 @@ public:
         file.close();
 
         // Update in-memory index and save to file
-        doctorPrimaryIndex[id] = position;
+        doctorPrimaryIndex[id] = doctor.offset;
         savePrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
         // new Added
@@ -161,7 +161,6 @@ public:
         loadPrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
         loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
-
         if (appointmentPrimaryIndex.find(id) != appointmentPrimaryIndex.end()) {
             cout << "Appointment ID already exists." << endl;
             return;
@@ -174,13 +173,13 @@ public:
         cin >> doctorID;
 
         if (doctorPrimaryIndex.find(doctorID) == doctorPrimaryIndex.end()) {
-            cout << "Doctor is not exists." << endl;
+            cout << "Doctor does not exist." << endl;
             return;
         }
 
         Appointment appointment(id, date, doctorID);
 
-        // Get available position from the avail list or append if none
+        // Get available position from the available list or append if none
         int position = getAvailPosition(appointmentFile, appointmentAvailList);
 
         ofstream file(appointmentFile, ios::app);
@@ -190,11 +189,11 @@ public:
         }
 
         file.seekp(position, ios::beg);
-        file << appointment.serialize();
+        file << appointment.serialize();  // Serialize and write the appointment to the file
         file.close();
 
-        // Update in-memory index and save to file
-        appointmentPrimaryIndex[id] = position;
+        // Update in-memory index and save it to the file
+        appointmentPrimaryIndex[id] = appointment.offset;  // Use the offset from the Appointment object
         savePrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
 
         cout << "Appointment added successfully." << endl;
