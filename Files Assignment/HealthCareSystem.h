@@ -260,21 +260,7 @@ public:
         cout << "Doctor Address: " << address << endl;
     }
 
-    void checkDoctorIdExists(const string& doctorId) {
-        // Load the primary index to get the offsets of doctors
-        loadPrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
-        int offset;
-        // Check if the doctor ID exists in the primary index
-        auto ID = doctorPrimaryIndex.find(doctorId);
-        if (ID != doctorPrimaryIndex.end()) {
-            // If found, print the offset associated with this doctor ID
-         offset=ID->second ;
-        }
-        else {
-            // If not found, print a message saying the ID does not exist
-            cout << "Doctor with ID " << doctorId << " does not exist." << endl;
-        }
-    }
+    
 
     void printAppointmentInfo() {
 
