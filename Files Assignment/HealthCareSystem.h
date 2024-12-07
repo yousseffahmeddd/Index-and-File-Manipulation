@@ -20,7 +20,7 @@ private:
     unordered_map<string, int> appointmentPrimaryIndex;
 
     //maps Doctor Name to doctor indexes
-    unordered_map<string, vector<string>> doctorSecondaryIndex;
+    unordered_map<string, string> doctorSecondaryIndex;
 
     //maps Doctor ID to appointment indexes
     unordered_map<string, vector<int>> doctorAppointmentIndex;
@@ -54,24 +54,26 @@ private:
         }
     }
 
-    void loadPrimaryIndex(const string& indexFile, unordered_map<string, int>& indexMap) {
+    template <class T>
+    void loadPrimaryIndex(const string& indexFile, unordered_map<string, T>& indexMap) {
         ifstream file(indexFile);
         if (!file) {
             cerr << "Error opening index file: " << indexFile << endl;
             return;
         }
         indexMap.clear();
-        string id;
-        int position;
-        while (file >> id >> position) {
-            indexMap[id] = position;
+        string key; // Referees to ID or DoctorName
+        T value; // Referees to Position or Dr. ID
+        while (file >> key >> value) {
+            indexMap[key] = value;
         }
         file.close();
     }
 
-    void savePrimaryIndex(const string& indexFile, const unordered_map<string, int>& indexMap) {
+    template <class T>
+    void savePrimaryIndex(const string& indexFile, const unordered_map<string, T>& indexMap) {
         // Convert the unordered_map to a vector of pairs
-        vector<pair<string, int>> entries(indexMap.begin(), indexMap.end());
+        vector<pair<string, T>> entries(indexMap.begin(), indexMap.end());
 
         // Sort the vector by the key (ID) in lexicographical order
         sort(entries.begin(), entries.end());
@@ -91,8 +93,6 @@ private:
     }
 
 
-
-
 public:
     void addDoctor() {
         string id, name, address;
@@ -100,7 +100,10 @@ public:
         cin >> id;
 
         loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
-
+        
+        // new Added
+        loadPrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+        //----------
 
         if (doctorPrimaryIndex.find(id) != doctorPrimaryIndex.end()) {
             cout << "Doctor ID already exists. Aborting." << endl;
@@ -131,8 +134,12 @@ public:
         doctorPrimaryIndex[id] = position;
         savePrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
+        // new Added
         // Update secondary index in memory
-        doctorSecondaryIndex[name].push_back(id);
+        doctorSecondaryIndex[name] = id;
+        savePrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+        //----------
+
 
         cout << "Doctor added successfully." << endl;
     }
