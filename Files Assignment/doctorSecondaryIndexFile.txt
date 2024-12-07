@@ -4,5 +4,6 @@ Zeiad D004
 ahmed D003
 amgad D010
 magdy D009
+magdy ghany D002
 mahmoud D001
 mazen D011

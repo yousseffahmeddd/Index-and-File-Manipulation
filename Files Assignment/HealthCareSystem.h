@@ -212,16 +212,17 @@ public:
     void printDoctorInfo(const string& doctorId) {
         // Load the primary index to get the offsets of doctors
         loadPrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
-
+        int offset=-1;
         // Check if the doctor ID exists in the primary index
-        if (doctorPrimaryIndex.find(doctorId) == doctorPrimaryIndex.end()) {
-            cout << "Doctor with ID " << doctorId << " not found." << endl;
-            return;
+        auto ID = doctorPrimaryIndex.find(doctorId);
+        if (ID != doctorPrimaryIndex.end()) {
+            // If found, print the offset associated with this doctor ID
+            offset = ID->second;
         }
-
-        // Get the offset for the specified doctor
-        int offset = doctorPrimaryIndex[doctorId];
-
+        else {
+            // If not found, print a message saying the ID does not exist
+            cout << "Doctor with ID " << doctorId << " does not exist." << endl;
+        }
         // Open the doctor file to read the doctor data
         fstream file(doctorFile, ios::in | ios::binary);
         if (!file) {
@@ -230,22 +231,49 @@ public:
         }
 
         // Seek to the offset where the doctor data is located
-        file.seekg(offset, ios::beg);
+        char ch;
+        string id, name, address;
 
-        // Read the doctor record (serialized string) from the file
-        string serializedDoctor;
-        getline(file, serializedDoctor);  // Read until the end of the record
+        file.seekg(offset + 2, ios::beg);
+        while (file.get(ch) && ch != '|') {
+            id += ch;
+        }
+
+        // Read Doctor Name (until we hit '|')
+        while (file.get(ch) && ch != '|') {
+            name += ch;
+        }
+
+        // Read Doctor Address (until the end of the line or EOF)
+        while (file.get(ch) && ch != '\n' && ch != EOF) {
+            address += ch;
+        }
+
 
         // Close the file after reading
-        file.close();
-
-        // Deserialize the data into a Doctor object
-        Doctor doctor = Doctor::deserialize(serializedDoctor);
+          file.close();
 
         // Print the doctor's information
-        cout << "Doctor ID: " << doctor.getId() << endl;
-        cout << "Doctor Name: " << doctor.getName() << endl;
-        cout << "Doctor Address: " << doctor.getAddress() << endl;
+        cout << offset<<endl;
+        cout << "Doctor ID: " << id << endl;
+        cout << "Doctor Name: " << name << endl;
+        cout << "Doctor Address: " << address << endl;
+    }
+
+    void checkDoctorIdExists(const string& doctorId) {
+        // Load the primary index to get the offsets of doctors
+        loadPrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
+        int offset;
+        // Check if the doctor ID exists in the primary index
+        auto ID = doctorPrimaryIndex.find(doctorId);
+        if (ID != doctorPrimaryIndex.end()) {
+            // If found, print the offset associated with this doctor ID
+         offset=ID->second ;
+        }
+        else {
+            // If not found, print a message saying the ID does not exist
+            cout << "Doctor with ID " << doctorId << " does not exist." << endl;
+        }
     }
 
     void printAppointmentInfo() {
