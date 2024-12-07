@@ -23,7 +23,7 @@ private:
     unordered_map<string, string> doctorSecondaryIndex;
 
     //maps Doctor ID to appointment indexes
-    unordered_map<string, vector<int>> doctorAppointmentIndex;
+    unordered_map<string, string> doctorAppointmentIndex;
 
     string doctorFile = "doctors.txt";        // Doctor data file
     string appointmentFile = "appointments.txt"; // Appointment data file
@@ -158,6 +158,7 @@ public:
         cout << "Enter Appointment ID: ";
         cin >> id;
 
+
         loadPrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
         loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
@@ -177,6 +178,10 @@ public:
             return;
         }
 
+        // new Added
+        loadPrimaryIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+        //----------
+
         Appointment appointment(id, date, doctorID);
 
         // Get available position from the available list or append if none
@@ -195,6 +200,12 @@ public:
         // Update in-memory index and save it to the file
         appointmentPrimaryIndex[id] = appointment.offset;  // Use the offset from the Appointment object
         savePrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
+
+        // new Added
+        // Update secondary index in memory
+        doctorAppointmentIndex[doctorID] = id;
+        savePrimaryIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+        //----------
 
         cout << "Appointment added successfully." << endl;
     }
