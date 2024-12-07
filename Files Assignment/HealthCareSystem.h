@@ -533,7 +533,8 @@ public:
         // Get Query From User
         string query;
         cout << "Enter Query: ";
-        cin >> query;
+        cin.ignore();
+        getline(cin, query);
         for (int i = 0; i < query.length(); ++i) {
             query[i] = tolower(query[i]);
         }
@@ -541,7 +542,6 @@ public:
         if (query.rfind("select", 0) == 0) { // Check The Query Validation
             // Check IF Primary OR Secondary Key
             string indexType = query.substr(query.find('t') + 2);
-            cout << indexType << endl;
 
             if (indexType.rfind("doctor id", 0) == 0) {
                 // DO Secondary Index ON Doctor ID 
@@ -552,13 +552,14 @@ public:
             else if ((indexType.rfind("all", 0) == 0) || (indexType.rfind("*", 0) == 0)) {
                 // Get Table Name
                 string tName = query.substr(query.find('m') + 2);
-                string condition = query.substr(query.find('=') + 1);
-                if (tName.rfind("doctors", 0) == 0) {
+                string condition = query.substr(query.find('=') + 2);
+                if (tName.rfind("doctor", 0) == 0) {
                     // DO Primary Index ON Doctor ID
-                    // USE stoi TO CHANGE FROM STRING TO INT EX: stoi(condition)
+                    printDoctorInfo(condition);
                 }
-                else if (tName.rfind("appointments", 0) == 0) {
+                else if (tName.rfind("appointment", 0) == 0) {
                     // DO Primary Index ON Appointment ID
+                    printAppointmentInfo(condition);
                 }
                 else {
                     cout << "TABLE NOT EXIST!" << endl;
