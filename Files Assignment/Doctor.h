@@ -11,8 +11,14 @@ public:
     int offset;
     static int cumulativeOffset;
 
-    Doctor(string id, string name, string address)
-        : id(id), name(name), address(address), offset(cumulativeOffset) {}
+    Doctor(string id, string name, string address, int offset=0)
+        : id(id), name(name), address(address), offset(offset) {
+    }
+
+    void setDoctorName(string name) {
+		this->name = name;
+    }
+
 
     string serialize() {
         int recordLength = id.length() + name.length() + address.length() + 2;

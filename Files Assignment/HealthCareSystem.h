@@ -49,10 +49,42 @@ private:
             int position = availList.back();
             availList.pop_back(); // Remove from avail list
             return position;
-        } else {
-            fstream file(filePath, ios::app);
-            return file.tellp(); // If no available spots, append to the end of file
         }
+        else {
+            // Open file in binary mode at the end to get the size
+            ifstream infile(filePath, ios::binary | ios::ate);
+            int position = 0;
+            if (infile) {
+                position = infile.tellg();
+            }
+            infile.close();
+            return position;
+        }
+    }
+
+    int binarySearch(const string& id, const string& indexFile, unordered_map<string, int>& indexMap) {
+
+        loadPrimaryIndex(indexFile, indexMap);
+
+        // Convert the unordered_map to a vector of pairs
+        vector<pair<string, int>> entries(indexMap.begin(), indexMap.end());
+
+        // Perform binary search
+        int low = 0;
+        int high = entries.size() - 1;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (entries[mid].first == id) {
+                return entries[mid].second;
+            }
+            else if (entries[mid].first < id) {
+                low = mid + 1;
+            }
+            else {
+                high = mid - 1;
+            }
+        }
+        return -1;
     }
 
     template <class T>
@@ -100,13 +132,10 @@ public:
         cout << "Enter Doctor ID: ";
         cin >> id;
 
-        loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
-        
-        // new Added
+        loadPrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
         loadPrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
-        //----------
 
-        if (doctorPrimaryIndex.find(id) != doctorPrimaryIndex.end()) {
+        if (binarySearch(id, doctorPriIndex, doctorPrimaryIndex) != -1) {
             cout << "Doctor ID already exists. Aborting." << endl;
             return;
         }
@@ -120,62 +149,165 @@ public:
         // Get available position or append
         int position = getAvailPosition(doctorFile, doctorAvailList);
 
-        fstream file("doctorIndexFile.txt", ios::in | ios::out);
+        // Create Doctor object with offset
+        Doctor doctor(id, name, address, position);  // Adjust the constructor to accept offset
+
+        // Open the doctorFile for reading and writing in binary mode
+        fstream file(doctorFile, ios::in | ios::out | ios::binary);
         if (!file) {
-            cerr << "Error opening doctor file." << endl;
-            return;
-        }
-        fstream docFile("doctors.txt", ios::in | ios::out);
-        if (!docFile) {
-            cerr << "Failed to open the file." << endl;
-            return;
-        }
-        // Get The Max Offset
-        vector<string> lines;
-        string line;
-        while (getline(file, line)) {  // Read each line
-            lines.push_back(line);
-        }
-        if (!lines.empty()) {
-            for (const auto& l : lines) {
-                int currNumber = stoi(l.substr(l.find(' ') + 1));
-                if (Doctor::cumulativeOffset < currNumber) {
-                    docFile.seekg(currNumber, ios::beg);
-                    string record;
-                    getline(docFile, record);
-                    Doctor::cumulativeOffset = currNumber + record.length() + 2;
-                }
+            // If the file doesn't exist, create it
+            ofstream outfile(doctorFile, ios::binary);
+            outfile.close();
+            file.open(doctorFile, ios::in | ios::out | ios::binary);
+            if (!file) {
+                cerr << "Error creating doctor file." << endl;
+                return;
             }
         }
-        docFile.close();
-        file.close();
-        //-------------------
-        
-        Doctor doctor(id, name, address);
-        file.open(doctorFile, ios::app);
+
+        // Seek to the position
         file.seekp(position, ios::beg);
-        file << doctor.serialize();
+
+        // Write the serialized doctor data
+        string serializedData = doctor.serialize();
+        file.write(serializedData.c_str(), serializedData.length());
         file.close();
 
         // Update in-memory index and save to file
-        doctorPrimaryIndex[id] = doctor.offset;
+        doctorPrimaryIndex[id] = position;  // Use the actual position
         savePrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
-        // new Added
         // Update secondary index in memory
         doctorSecondaryIndex[name] = id;
         savePrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
-        //----------
+
+        // Update the cumulative offset
+        Doctor::cumulativeOffset = position + serializedData.length();
 
         cout << "Doctor added successfully." << endl;
     }
 
-    void deleteDoctor() {
-    
+
+    void deleteDoctor(const string& doctorId) {
+		int offset = binarySearch(doctorId, doctorPriIndex, doctorPrimaryIndex);
+        // Open the doctor file for reading and writing in binary mode
+        fstream file(doctorFile, ios::in | ios::out | ios::binary);
+
+		if (offset == -1) {
+			cout << "Doctor doesn't exist" << endl;
+			return;
+		}
+        
+        file.seekg(offset, ios::beg);
+        char marker;
+        file.get(marker);
+        if (marker == '*') {
+            cout << "Doctor already deleted" << endl;
+            return;
+        }
+		// Mark the old record as deleted
+		markDeleted(doctorFile, offset);
+		// Get new position for the updated record
+		int newPosition = getAvailPosition(doctorFile, doctorAvailList);
+		
+		if (!file) {
+			cerr << "Error opening doctor file." << endl;
+			return;
+		}
+
+		//remove from primary index
+		doctorPrimaryIndex.erase(doctorId);
+
+		savePrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
+		cout << "Doctor deleted successfully." << endl;
     }
 
-    void updateDoctorName() {
 
+    void updateDoctorName(const string& doctorId) {
+
+        int offset = binarySearch(doctorId, doctorPriIndex, doctorPrimaryIndex);
+
+        if (offset == -1) {
+            cout << "Doctor doesn't exist" << endl;
+            return;
+        }
+
+        // Open the doctor file to read the doctor data
+        fstream file(doctorFile, ios::in | ios::binary | ios::out);
+        if (!file) {
+            cerr << "Error opening doctor file." << endl;
+            return;
+        }
+
+        // Seek to the offset where the doctor data is located
+        char ch;
+        string id, name, address;
+
+		file.seekg(offset + 2, ios::beg);
+        while (file.get(ch) && ch != '|') {
+            id += ch;
+        }
+
+        // Read Doctor Name (until we hit '|')
+        while (file.get(ch) && ch != '|') {
+            name += ch;
+        }
+
+        // Read Doctor Address (until the end of the line or EOF)
+        while (file.get(ch) && ch != '\n' && ch != EOF) {
+            address += ch;
+        }
+
+		cout << "Enter New Name: ";
+        string newName;
+        cin.ignore();
+		getline(cin, newName);
+
+		if (newName.length() == name.length()) {
+			file.seekp(offset + 2 + id.length() + 1, ios::beg);
+			file.write(newName.c_str(), newName.length());
+			cout << "Doctor Name Updated Successfully." << endl;
+		}
+
+        else {
+            // Mark the old record as deleted
+            markDeleted(doctorFile, offset);
+
+            // Get new position for the updated record
+            int newPosition = getAvailPosition(doctorFile, doctorAvailList);
+
+            // Create a new Doctor object with the updated name
+            Doctor updatedDoctor(id, newName, address, newPosition);
+
+            // Serialize the updated doctor data
+            string updatedSerializedData = updatedDoctor.serialize();
+
+            // Open the doctor file for reading and writing in binary mode
+            fstream file(doctorFile, ios::in | ios::out | ios::binary);
+            if (!file) {
+                cerr << "Error opening doctor file." << endl;
+                return;
+            }
+
+            // Seek to the new position
+            file.seekp(newPosition, ios::beg);
+
+            // Write the updated serialized doctor data
+            file.write(updatedSerializedData.c_str(), updatedSerializedData.length());
+            file.close();
+
+            // Update the primary index with the new position
+            doctorPrimaryIndex[id] = newPosition;
+            savePrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+
+            // Update the secondary index with the new name
+            doctorSecondaryIndex.erase(name);
+            doctorSecondaryIndex[newName] = id;
+            savePrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+
+            cout << "Doctor Name Updated Successfully." << endl;
+        
+        }
     }
 
     void addAppointment() {
@@ -184,12 +316,11 @@ public:
         cout << "Enter Appointment ID: ";
         cin >> id;
 
-
         loadPrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
         loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
-        if (appointmentPrimaryIndex.find(id) != appointmentPrimaryIndex.end()) {
-            cout << "Appointment ID already exists." << endl;
+        if (binarySearch(id, appointment, appointmentPrimaryIndex) != -1) {
+            cout << "Appointment ID already exists. Aborting." << endl;
             return;
         }
 
@@ -204,93 +335,116 @@ public:
             return;
         }
 
-        // new Added
+        // Load secondary index
         loadPrimaryIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
-        //----------
-        
-        // Get available position from the available list or append if none
+
+        // Get available position or append
         int position = getAvailPosition(appointmentFile, appointmentAvailList);
 
-        fstream file("appointmentIndexFile.txt", ios::in | ios::out);
+        // Create Appointment object with offset
+        Appointment appointment(id, date, doctorID, position); // Adjust the constructor to accept offset
+
+        // Open the appointmentFile for reading and writing in binary mode
+        fstream file(appointmentFile, ios::in | ios::out | ios::binary);
         if (!file) {
-            cerr << "Failed to open the file." << endl;
-            return;
-        }
-        fstream appFile("appointments.txt", ios::in | ios::out);
-        if (!appFile) {
-            cerr << "Failed to open the file." << endl;
-            return;
-        }
-        
-        // Get The Max Offset
-        vector<string> lines;
-        string line;
-        while (getline(file, line)) {  // Read each line
-            lines.push_back(line);
-        }
-
-        for (int i = 0; i < lines.size(); ++i) {
-            cout << lines.at(i) << endl;
-        }
-
-        if (!lines.empty()) {
-            for (const auto& l : lines) {
-                int currNumber = stoi(l.substr(l.find(' ') + 1));
-                if (Appointment::cumulativeOffset < currNumber) {
-                    appFile.seekg(currNumber, ios::beg);
-                    string record;
-                    getline(appFile, record);
-                    Appointment::cumulativeOffset = currNumber + record.length() + 2;
-                }
+            // If the file doesn't exist, create it
+            ofstream outfile(appointmentFile, ios::binary);
+            outfile.close();
+            file.open(appointmentFile, ios::in | ios::out | ios::binary);
+            if (!file) {
+                cerr << "Error creating appointment file." << endl;
+                return;
             }
         }
-        appFile.close();
-        file.close();
 
-        Appointment appointment(id, date, doctorID);
-
-        file.open(appointmentFile, ios::app);
+        // Seek to the position
         file.seekp(position, ios::beg);
-        file << appointment.serialize();  // Serialize and write the appointment to the file
+
+        // Write the serialized appointment data
+        string serializedData = appointment.serialize();
+        file.write(serializedData.c_str(), serializedData.length());
         file.close();
 
-        // Update in-memory index and save it to the file
-        appointmentPrimaryIndex[id] = appointment.offset;  // Use the offset from the Appointment object
+        // Update in-memory index and save to file
+        appointmentPrimaryIndex[id] = position; // Use the actual position
         savePrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
 
-        // new Added
         // Update secondary index in memory
         doctorAppointmentIndex[doctorID] = id;
         savePrimaryIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
-        //----------
+
+        // Update the cumulative offset
+        Appointment::cumulativeOffset = position + serializedData.length();
 
         cout << "Appointment added successfully." << endl;
     }
 
-    void updateAppointmentDate() {
-    
+
+    void updateAppointmentDate(const string& appointmentId) {
+        int offset = binarySearch(appointmentId, appointment, appointmentPrimaryIndex);
+
+        if (offset == -1) {
+            cout << "Appointment doesn't exist" << endl;
+            return;
+        }
+        // Open the doctor file to read the doctor data
+        fstream file(appointmentFile, ios::in | ios::binary | ios::out);
+        if (!file) {
+            cerr << "Error opening appointment file." << endl;
+            return;
+        }
+
+        // Seek to the offset where the doctor data is located
+        char ch;
+        string id, date, doctorId;
+
+        file.seekg(offset + 2, ios::beg);
+        while (file.get(ch) && ch != '|') {
+            id += ch;
+        }
+
+        // Read Doctor Name (until we hit '|')
+        while (file.get(ch) && ch != '|') {
+            date += ch;
+        }
+
+        // Read Doctor Address (until the end of the line or EOF)
+        while (file.get(ch) && ch != '\n' && ch != EOF) {
+            doctorId += ch;
+        }
+
+        cout << "Enter New Appointment Date (YYYY-MM-DD): ";
+        string newDate;
+        cin.ignore();
+        getline(cin, newDate);
+
+        if (newDate.length() == date.length()) {
+            file.seekp(offset + 2 + id.length() + 1, ios::beg);
+            file.write(newDate.c_str(), newDate.length());
+            cout << "Appointment Date Updated Successfully." << endl;
+        }
+
+        else {
+            cout << "date needs to be in the specified format (YYYY-MM-DD)! "<<endl;
+        }
     }
 
 
 
     void deleteAppointment() {
 
+
     }
 
     void printDoctorInfo(const string& doctorId) {
-        // Load the primary index to get the offsets of doctors
-        loadPrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
-        int offset=-1;
-        // Check if the doctor ID exists in the primary index
-        auto ID = doctorPrimaryIndex.find(doctorId);
-        if (ID != doctorPrimaryIndex.end()) {
-            // If found, print the offset associated with this doctor ID
-            offset = ID->second;
+
+        int offset = binarySearch(doctorId, doctorPriIndex, doctorPrimaryIndex);
+
+        if (offset == -1) {
+            cout << "Doctor doesn't exist" << endl;
+            return;
         }
-        else {
-            // If not found, print a message saying the ID does not exist
-            cout << "Doctor with ID " << doctorId << " does not exist." << endl;
-        }
+
         // Open the doctor file to read the doctor data
         fstream file(doctorFile, ios::in | ios::binary);
         if (!file) {
@@ -330,9 +484,50 @@ public:
 
     
 
-    void printAppointmentInfo() {
+    void printAppointmentInfo(const string& appointmentId) {
+        int offset = binarySearch(appointmentId, appointment, appointmentPrimaryIndex);
 
+        if (offset == -1) {
+            cout << "Appointment doesn't exist" << endl;
+            return;
+        }
+        // Open the doctor file to read the doctor data
+        fstream file(appointmentFile, ios::in | ios::binary);
+        if (!file) {
+            cerr << "Error opening appointment file." << endl;
+            return;
+        }
+
+        // Seek to the offset where the doctor data is located
+        char ch;
+        string id, date, doctorId;
+
+        file.seekg(offset + 2, ios::beg);
+        while (file.get(ch) && ch != '|') {
+            id += ch;
+        }
+
+        // Read Doctor Name (until we hit '|')
+        while (file.get(ch) && ch != '|') {
+            date += ch;
+        }
+
+        // Read Doctor Address (until the end of the line or EOF)
+        while (file.get(ch) && ch != '\n' && ch != EOF) {
+            doctorId += ch;
+        }
+
+
+        // Close the file after reading
+        file.close();
+
+        // Print the doctor's information
+        cout << offset << endl;
+        cout << "Appointment ID: " << id << endl;
+        cout << "Appointment Date: " << date << endl;
+        cout << "Doctor ID: " << doctorId << endl;
     }
+
 
     void handleQueries() {
         // Get Query From User
@@ -379,6 +574,7 @@ public:
     }
 
     void menu() {
+
         int choice;
         do {
             cout << endl << "--- Healthcare Management System ---" << endl;
@@ -397,9 +593,33 @@ public:
             switch (choice) {
             case 1: addDoctor(); break;
             case 2: addAppointment(); break;
-            case 3: updateDoctorName(); break;
-            case 4: updateAppointmentDate(); break;
-            case 5: deleteDoctor(); break;
+            case 3: {
+                string doctorId;
+                cout << "Enter Doctor ID to update doctor name: ";
+                cin >> doctorId;
+
+				updateDoctorName(doctorId);
+				break;
+            }
+            case 4: {
+                string appointmentId;
+                cout << "Enter Appointment ID to view information: ";
+                cin >> appointmentId;
+
+                // Call the function to print doctor info
+                updateAppointmentDate(appointmentId);
+                break;
+            }
+            case 5: {
+                // Prompt for Doctor ID
+                string doctorId;
+                cout << "Enter Doctor ID to delete: ";
+                cin >> doctorId;
+
+                // Call the function to print doctor info
+                deleteDoctor(doctorId);
+                break;
+            }
             case 6: deleteAppointment(); break;
             case 7: {
                 // Prompt for Doctor ID
@@ -411,7 +631,16 @@ public:
                 printDoctorInfo(doctorId);
                 break;
             }
-            case 8: printAppointmentInfo(); break;
+            case 8: {
+                // Prompt for Doctor ID
+                string appointmentId;
+                cout << "Enter Appointment ID to view information: ";
+                cin >> appointmentId;
+
+                // Call the function to print doctor info
+                printAppointmentInfo(appointmentId);
+                break;
+            }
             case 9: handleQueries(); break;
             case 10: cout << "Exiting system.\n"; break;
             default: cout << "Invalid choice. Try again.\n"; break;

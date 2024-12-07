@@ -14,8 +14,8 @@ public:
     static int cumulativeOffset;
 
     // Constructor to initialize appointment details and offset
-    Appointment(string id, string date, string doctorID)
-        : id(id), date(date), doctorID(doctorID), offset(cumulativeOffset) {}
+    Appointment(string id, string date, string doctorID,int offset = 0)
+        : id(id), date(date), doctorID(doctorID), offset(offset) {}
 
     // Serializes the Appointment to a string
     string serialize() {
