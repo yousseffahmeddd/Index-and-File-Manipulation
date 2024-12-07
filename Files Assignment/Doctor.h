@@ -19,6 +19,9 @@ public:
         cumulativeOffset += recordLength + 2;
         return to_string(recordLength) + id + "|" + name + "|" + address + "\n";
     }
+    string getId() const { return id; }
+    string getName() const { return name; }
+    string getAddress() const { return address; }
 
     // Deserializes a string from file into a Doctor object
     static Doctor deserialize(const string& record) {

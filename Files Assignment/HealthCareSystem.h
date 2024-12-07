@@ -209,8 +209,43 @@ public:
 
     }
 
-    void printDoctorInfo() {
+    void printDoctorInfo(const string& doctorId) {
+        // Load the primary index to get the offsets of doctors
+        loadPrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
 
+        // Check if the doctor ID exists in the primary index
+        if (doctorPrimaryIndex.find(doctorId) == doctorPrimaryIndex.end()) {
+            cout << "Doctor with ID " << doctorId << " not found." << endl;
+            return;
+        }
+
+        // Get the offset for the specified doctor
+        int offset = doctorPrimaryIndex[doctorId];
+
+        // Open the doctor file to read the doctor data
+        fstream file(doctorFile, ios::in | ios::binary);
+        if (!file) {
+            cerr << "Error opening doctor file." << endl;
+            return;
+        }
+
+        // Seek to the offset where the doctor data is located
+        file.seekg(offset, ios::beg);
+
+        // Read the doctor record (serialized string) from the file
+        string serializedDoctor;
+        getline(file, serializedDoctor);  // Read until the end of the record
+
+        // Close the file after reading
+        file.close();
+
+        // Deserialize the data into a Doctor object
+        Doctor doctor = Doctor::deserialize(serializedDoctor);
+
+        // Print the doctor's information
+        cout << "Doctor ID: " << doctor.getId() << endl;
+        cout << "Doctor Name: " << doctor.getName() << endl;
+        cout << "Doctor Address: " << doctor.getAddress() << endl;
     }
 
     void printAppointmentInfo() {
@@ -284,7 +319,16 @@ public:
             case 4: updateAppointmentDate(); break;
             case 5: deleteDoctor(); break;
             case 6: deleteAppointment(); break;
-            case 7: printDoctorInfo(); break;
+            case 7: {
+                // Prompt for Doctor ID
+                string doctorId;
+                cout << "Enter Doctor ID to view information: ";
+                cin >> doctorId;
+
+                // Call the function to print doctor info
+                printDoctorInfo(doctorId);
+                break;
+            }
             case 8: printAppointmentInfo(); break;
             case 9: handleQueries(); break;
             case 10: cout << "Exiting system.\n"; break;
