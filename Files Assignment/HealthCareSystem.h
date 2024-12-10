@@ -463,9 +463,38 @@ public:
 
 
 
-    void deleteAppointment() {
+    void deleteAppointment(const string& appointmentId) {
+        int offset = binarySearch(appointmentId, appointment, appointmentPrimaryIndex);
+        // Open the doctor file for reading and writing in binary mode
+        fstream file(appointmentFile, ios::in | ios::out | ios::binary);
 
+        if (offset == -1) {
+            cout << "Appointment doesn't exist" << endl;
+            return;
+        }
 
+        file.seekg(offset, ios::beg);
+        char marker;
+        file.get(marker);
+        if (marker == '*') {
+            cout << "Appointment already deleted" << endl;
+            return;
+        }
+        // Mark the old record as deleted
+        markDeleted(appointmentFile, offset);
+        // Get new position for the updated record
+        int newPosition = getAvailPosition(appointment, appointmentAvailList);
+
+        if (!file) {
+            cerr << "Error opening appointment file." << endl;
+            return;
+        }
+
+        //remove from primary index
+        doctorPrimaryIndex.erase(appointmentId);
+
+        savePrimaryIndex(appointment, appointmentPrimaryIndex);
+        cout << "Appointment deleted successfully." << endl;
     }
 
     void printDoctorInfo(const string& doctorId) {
@@ -669,7 +698,17 @@ public:
                 system("pause");
                 break;
             }
-            case 6: deleteAppointment(); break;
+            case 6: {
+                // Prompt for Doctor ID
+                string appointmentId;
+				cout << "Enter Appointment ID to delete: ";
+                cin >> appointmentId;
+
+                // Call the function to print doctor info
+                deleteAppointment(appointmentId);
+                system("pause");
+                break;
+            }
             case 7: {
                 // Prompt for Doctor ID
                 string doctorId;
