@@ -911,44 +911,33 @@ public:
                 // DO Secondary Index ON Doctor Name 
                 string tName = query.substr(query.find("from") + 5);
                 string condition = query.substr(query.find('=') + 2);
-                vector<string> doctorIDs = getRecordsForName("doctorSecondaryIndexFile.txt", "doctorLinkedList.txt", condition);  // ===> param
-                ifstream file("doctors.txt");
-                vector<string> result;
-
-                if (!file) {
-                    cerr << "Error opening file: doctors.txt" << endl;
+                ifstream file(doctorFile);
+                if (!file.is_open()) {
+                    cerr << "Error: Could not open file." << endl;
                     return;
                 }
+
                 string line;
                 while (getline(file, line)) {
-                    // Skip lines that start with '*'
-                    if (line.empty() || line[0] == '*') {
-                        continue;
-                    }
-
-                    // Extract the substring from the third character to the first '|'
                     size_t firstPipe = line.find('|');
-                    if (firstPipe != string::npos && line.size() > 2) {
-                        string checkSubstring = line.substr(2, firstPipe - 2);
+                    size_t secondPipe = line.find('|', firstPipe + 1);
 
-                        // Compare with the first value in the checkVector
-                        if (!doctorIDs.empty() && doctorIDs[0] == checkSubstring) {
-                            // Find the second '|'
-                            size_t secondPipe = line.find('|', firstPipe + 1);
+                    if (firstPipe != string::npos && secondPipe != string::npos) {
+                        // Extract the substring from the 3rd character to before the first '|'
+                        string key = line.substr(2, firstPipe - 2);
 
-                            if (secondPipe != string::npos) {
-                                // Extract the substring between the first and second '|'
-                                string value = line.substr(firstPipe + 1, secondPipe - firstPipe - 1);
-                                result.push_back(value);
-                            }
+                        // Extract the value between the first and second '|'
+                        string value = line.substr(firstPipe + 1, secondPipe - firstPipe - 1);
+
+                        // Compare the key with the input string
+                        if (key == condition) {
+                            file.close();
+                            cout << "Doctor Name: " << value << endl;
                         }
                     }
                 }
-                file.close();
 
-                for (const string& names : result) {
-                    cout << "Doctor Name: " << names << endl;
-                }
+                file.close();
             }
             else if ((indexType.rfind("all", 0) == 0) || (indexType.rfind("*", 0) == 0)) {
                 // Get Table Name
@@ -956,9 +945,10 @@ public:
                 string condition = query.substr(query.find('=') + 2);
                 if (tName.rfind("appointments", 0) == 0) {
                     // Secondary index on Appointment
-                    vector<string> doctorIDs = getRecordsForName("AppointmentSecondaryIndexFile.txt", "appointmentLinkedList.txt", condition); // ===> Param
+                    vector<string> doctorIDs = getRecordsForName("AppointmentSecondaryIndexFile.txt", "appointmentLinkedList.txt", condition);
                     for (const string& doctorID : doctorIDs) {
-                        cout << "Appointment ID: " << doctorID << endl;
+                        printAppointmentInfo(doctorID);
+                        cout << "============================" << endl;
                     }
                 }
                 else if (tName.rfind("doctor", 0) == 0) {
