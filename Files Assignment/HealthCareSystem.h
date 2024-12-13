@@ -29,18 +29,15 @@ private:
     unordered_map<string, int> doctorSecondaryIndex;
 
     //maps Doctor ID to appointment indexes
-    unordered_map<string, string> doctorAppointmentIndex;
-
+    unordered_map<string, int> doctorAppointmentIndex;
 
     //LinkedLists for secondary indexes
     unordered_map<int, LinkedListNode> doctorNameLinkedList; // Maps index to LinkedListNode
 	unordered_map<int, LinkedListNode> appointmentLinkedList; // Maps index to LinkedListNode
 
-
-
-    int nextDoctorNameListIndex = 0; // Tracks the next available index for the linked list nodes
-
-    
+	// Indexes for the next available index in the linked lists
+    int nextDoctorNameListIndex = 0;
+	int nextAppointmentListIndex = 0;
 
     string doctorFile = "doctors.txt";        // Doctor data file
     string appointmentFile = "appointments.txt"; // Appointment data file
@@ -55,16 +52,22 @@ private:
         }
         linkedList.clear();
         int index;
-        string doctorId;
+        string id; // Can be doctorId or appointmentId based on context
         int nextIndex;
         int maxIndex = -1;
-        while (file >> index >> doctorId >> nextIndex) {
-            linkedList[index] = { doctorId, nextIndex };
+        while (file >> index >> id >> nextIndex) {
+            linkedList[index] = { id, nextIndex };
             if (index > maxIndex) {
                 maxIndex = index;
             }
         }
-        nextDoctorNameListIndex = maxIndex + 1;
+        // Update appropriate next index based on which linked list we're loading
+        if (fileName == "doctorLinkedList.txt") {
+            nextDoctorNameListIndex = maxIndex + 1;
+        }
+        else if (fileName == "appointmentLinkedList.txt") {
+            nextAppointmentListIndex = maxIndex + 1;
+        }
         file.close();
     }
 
@@ -79,6 +82,7 @@ private:
         }
         file.close();
     }
+
 
     void markDeleted(const string& filePath, int position) {
         fstream file(filePath, ios::in | ios::out);
@@ -509,41 +513,31 @@ public:
     }
 
     void addAppointment() {
-        string id, date, doctorID;
-
+        string id, date, doctorId;
         cout << "Enter Appointment ID: ";
         cin >> id;
 
-        loadIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
-        loadIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+        loadIndex(appointment, appointmentPrimaryIndex);
+        loadIndex("appointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
 
         if (binarySearch(id, appointment, appointmentPrimaryIndex) != -1) {
-            cout << "Appointment ID already exists. Aborting." << endl;
+            cout << "Doctor ID already exists. Aborting." << endl;
             return;
         }
 
-        cout << "Enter Appointment Date (YYYY-MM-DD): ";
-        cin >> date;
-
+        cout << "Enter Doctor date: ";
+        cin.ignore();
+        getline(cin, date);
         cout << "Enter Doctor ID: ";
-        cin >> doctorID;
-
-        if (doctorPrimaryIndex.find(doctorID) == doctorPrimaryIndex.end()) {
-            cout << "Doctor does not exist." << endl;
-            return;
-        }
-
-        // Load secondary index
-        loadIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
-		loadLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
+        getline(cin, doctorId);
 
         // Get available position or append
         int position = getAvailPosition(appointmentFile, appointmentAvailList);
 
         // Create Appointment object with offset
-        Appointment appointment(id, date, doctorID, position); // Adjust the constructor to accept offset
+        Appointment appointment(id, date, doctorId, position);  // Adjust the constructor to accept offset
 
-        // Open the appointmentFile for reading and writing in binary mode
+        // Open the doctorFile for reading and writing in binary mode
         fstream file(appointmentFile, ios::in | ios::out | ios::binary);
         if (!file) {
             // If the file doesn't exist, create it
@@ -559,22 +553,37 @@ public:
         // Seek to the position
         file.seekp(position, ios::beg);
 
-        // Write the serialized appointment data
+        // Write the serialized doctor data
         string serializedData = appointment.serialize();
         file.write(serializedData.c_str(), serializedData.length());
         file.close();
 
         // Update in-memory index and save to file
-        appointmentPrimaryIndex[id] = position; // Use the actual position
+        appointmentPrimaryIndex[id] = position;  // Use the actual position
         saveIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
+        loadLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
 
-        // Update secondary index in memory
-        doctorAppointmentIndex[doctorID] = id;
-        saveIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
-		saveLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
+        // Update secondary index and linked list
+        if (doctorAppointmentIndex.find(doctorId) == doctorAppointmentIndex.end()) {
+            // New name, create new linked list entry
+            doctorAppointmentIndex[doctorId] = nextAppointmentListIndex;
+            appointmentLinkedList[nextAppointmentListIndex] = { id, -1 };
+            nextAppointmentListIndex++;
+        }
+        else {
+            // Existing name, append to linked list
+            int currentIdx = doctorAppointmentIndex[doctorId];
+            while (appointmentLinkedList[currentIdx].next != -1) {
+                currentIdx = appointmentLinkedList[currentIdx].next;
+            }
+            appointmentLinkedList[currentIdx].next = nextAppointmentListIndex;
+            appointmentLinkedList[nextAppointmentListIndex] = { id, -1 };
+            nextAppointmentListIndex++;
+        }
 
-        // Update the cumulative offset
-        Appointment::cumulativeOffset = position + serializedData.length();
+        // Save secondary index and linked list
+        saveIndex("appointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+        saveLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
 
         cout << "Appointment added successfully." << endl;
     }
@@ -629,36 +638,80 @@ public:
     }
 
     void deleteAppointment(const string& appointmentId) {
-        int offset = binarySearch(appointmentId, appointment, appointmentPrimaryIndex);
-        // Open the doctor file for reading and writing in binary mode
-        fstream file(appointmentFile, ios::in | ios::out | ios::binary);
+        // Step 1: Locate the Appointment Record
+        int offset = binarySearch(appointmentId, "appointmentIndexFile.txt", appointmentPrimaryIndex);
 
         if (offset == -1) {
             cout << "Appointment doesn't exist" << endl;
             return;
         }
 
-        file.seekg(offset, ios::beg);
-        char marker;
-        file.get(marker);
-        if (marker == '*') {
-            cout << "Appointment already deleted" << endl;
-            return;
-        }
-        // Mark the old record as deleted
-        markDeleted(appointmentFile, offset);
-        // Get new position for the updated record
-        int newPosition = getAvailPosition(appointment, appointmentAvailList);
-
+        // Step 2: Read Appointment Data
+        string id, date, doctorId;
+        fstream file(appointmentFile, ios::in | ios::binary);
         if (!file) {
             cerr << "Error opening appointment file." << endl;
             return;
         }
 
-        //remove from primary index
-        doctorPrimaryIndex.erase(appointmentId);
+        char ch;
+        file.seekg(offset + 2, ios::beg); // Skip the deletion marker
+        while (file.get(ch) && ch != '|') {
+            id += ch;
+        }
+        while (file.get(ch) && ch != '|') {
+            date += ch;
+        }
+        while (file.get(ch) && ch != '\n' && ch != EOF) {
+            doctorId += ch;
+        }
+        file.close();
 
-        saveIndex(appointment, appointmentPrimaryIndex);
+        // Step 3: Mark the Appointment Record as Deleted
+        markDeleted(appointmentFile, offset);
+
+        // Step 4: Update the Primary Index
+        appointmentPrimaryIndex.erase(appointmentId);
+        saveIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
+
+        // Step 5: Update the Secondary Index and Linked List
+        loadIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+        loadLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
+
+        // Remove from linked list
+        if (doctorAppointmentIndex.find(doctorId) != doctorAppointmentIndex.end()) {
+            int currentIdx = doctorAppointmentIndex[doctorId];
+            int prevIdx = -1;
+            while (currentIdx != -1) {
+                if (appointmentLinkedList[currentIdx].doctorId == appointmentId) {
+                    // Found the node to delete
+                    if (prevIdx == -1) {
+                        // First node in the list
+                        if (appointmentLinkedList[currentIdx].next == -1) {
+                            // Only node, remove doctorId from secondary index
+                            doctorAppointmentIndex.erase(doctorId);
+                        }
+                        else {
+                            // Move head to next node
+                            doctorAppointmentIndex[doctorId] = appointmentLinkedList[currentIdx].next;
+                        }
+                    }
+                    else {
+                        // Middle or last node
+                        appointmentLinkedList[prevIdx].next = appointmentLinkedList[currentIdx].next;
+                    }
+                    appointmentLinkedList.erase(currentIdx);
+                    break;
+                }
+                prevIdx = currentIdx;
+                currentIdx = appointmentLinkedList[currentIdx].next;
+            }
+        }
+
+        // Step 6: Save the Updated Indexes
+        saveIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+        saveLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
+
         cout << "Appointment deleted successfully." << endl;
     }
 
@@ -752,6 +805,19 @@ public:
         cout << "Doctor ID: " << doctorId << endl;
     }
 
+    /*void printAppointmentsByDoctor(const string& doctorId) {
+        loadIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+
+        if (doctorAppointmentIndex.find(doctorId) == doctorAppointmentIndex.end()) {
+            cout << "No appointments found for Doctor ID: " << doctorId << endl;
+            return;
+        }
+
+        cout << "Appointments for Doctor ID " << doctorId << ":" << endl;
+        for (const auto& appointmentId : doctorAppointmentIndex[doctorId]) {
+            printAppointmentInfo(appointmentId);
+        }
+    }*/
 
     void handleQueries() {
         // Get Query From User
@@ -885,3 +951,6 @@ public:
         } while (choice != 10);
     }
 };
+
+
+
