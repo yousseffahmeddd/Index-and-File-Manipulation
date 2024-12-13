@@ -819,43 +819,162 @@ public:
         }
     }*/
 
+    vector<string> getRecordsForName(const string& file1Name, const string& file2Name, const string& targetName) {
+        // Open File 1 to get the name and pointer (line number)
+        ifstream file1(file1Name);
+        if (!file1) {
+            cerr << "Error opening " << file1Name << endl;
+            return {};
+        }
+
+        string name;
+        int pointer;
+
+        // Process File 1 to find the pointer for the target name
+        int targetPointer = -1;
+        while (file1 >> name >> pointer) {
+            if (name == targetName) {
+                targetPointer = pointer;  // Get the pointer for the target name
+                break;
+            }
+        }
+
+        // If target name was not found in File 1, return an empty vector
+        if (targetPointer == -1) {
+            cerr << "Name not found in File 1." << endl;
+            return {};
+        }
+
+        // Close File 1 after processing
+        file1.close();
+
+        // Open File 2 to process the records
+        ifstream file2(file2Name);
+        if (!file2) {
+            cerr << "Error opening " << file2Name << endl;
+            return {};
+        }
+
+        // Vector to store the result
+        vector<string> result;
+        int currentPointer = targetPointer;
+
+        // Follow the pointer chain in File 2
+        string line;
+        while (currentPointer != -1) {
+            file2.clear();              // Clear the EOF flag
+            file2.seekg(0, ios::beg);   // Go back to the beginning of the file
+
+            bool found = false;
+            while (getline(file2, line)) {
+                stringstream ss(line);
+                int field1, field3;
+                string field2;
+
+                ss >> field1 >> field2 >> field3;
+
+                if (field1 == currentPointer) {
+                    result.push_back(field2);  // Add the second field to the result
+                    currentPointer = field3;  // Update the pointer to the next record's ID (third field)
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                cerr << "Error: Pointer " << currentPointer << " not found in File 2." << endl;
+                break;
+            }
+        }
+
+        // Close File 2 after processing
+        file2.close();
+
+        return result;  // Return the vector of collected strings
+    }
+
     void handleQueries() {
         // Get Query From User
         string query;
         cout << "Enter Query: ";
         cin.ignore();
         getline(cin, query);
-        transform(query.begin(), query.end(), query.begin(), ::tolower);
+        for (int i = 0; i < query.length(); ++i) {
+            query[i] = tolower(query[i]);
+        }
 
-        if (query.find("select") == 0) {
-            if (query.find("doctor name") != string::npos) {
-                // Extract name from query
-                string name = query.substr(query.find("=") + 1);
-                name.erase(remove(name.begin(), name.end(), ' '), name.end());
+        if (query.rfind("select", 0) == 0) { // Check The Query Validation
+            // Check IF Primary OR Secondary Key
+            string indexType = query.substr(query.find('t') + 2);
 
-                // Load secondary index and linked list
-                loadIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
-                loadLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
+            if (indexType.rfind("doctor name", 0) == 0) {
+                // DO Secondary Index ON Doctor Name 
+                string tName = query.substr(query.find("from") + 5);
+                string condition = query.substr(query.find('=') + 2);
+                vector<string> doctorIDs = getRecordsForName("doctorSecondaryIndexFile.txt", "doctorLinkedList.txt", condition);  // ===> param
+                ifstream file("doctors.txt");
+                vector<string> result;
 
-                if (doctorSecondaryIndex.find(name) != doctorSecondaryIndex.end()) {
-                    int currentIdx = doctorSecondaryIndex[name];
-                    cout << "Doctors with name '" << name << "':" << endl;
-                    while (currentIdx != -1) {
-                        string doctorId = doctorNameLinkedList[currentIdx].doctorId;
-                        printDoctorInfo(doctorId);
-                        currentIdx = doctorNameLinkedList[currentIdx].next;
+                if (!file) {
+                    cerr << "Error opening file: doctors.txt" << endl;
+                    return;
+                }
+                string line;
+                while (getline(file, line)) {
+                    // Skip lines that start with '*'
+                    if (line.empty() || line[0] == '*') {
+                        continue;
+                    }
+
+                    // Extract the substring from the third character to the first '|'
+                    size_t firstPipe = line.find('|');
+                    if (firstPipe != string::npos && line.size() > 2) {
+                        string checkSubstring = line.substr(2, firstPipe - 2);
+
+                        // Compare with the first value in the checkVector
+                        if (!doctorIDs.empty() && doctorIDs[0] == checkSubstring) {
+                            // Find the second '|'
+                            size_t secondPipe = line.find('|', firstPipe + 1);
+
+                            if (secondPipe != string::npos) {
+                                // Extract the substring between the first and second '|'
+                                string value = line.substr(firstPipe + 1, secondPipe - firstPipe - 1);
+                                result.push_back(value);
+                            }
+                        }
                     }
                 }
+                file.close();
+
+                for (const string& names : result) {
+                    cout << "Doctor Name: " << names << endl;
+                }
+            }
+            else if ((indexType.rfind("all", 0) == 0) || (indexType.rfind("*", 0) == 0)) {
+                // Get Table Name
+                string tName = query.substr(query.find('m') + 2);
+                string condition = query.substr(query.find('=') + 2);
+                if (tName.rfind("appointments", 0) == 0) {
+                    // Secondary index on Appointment
+                    vector<string> doctorIDs = getRecordsForName("AppointmentSecondaryIndexFile.txt", "appointmentLinkedList.txt", condition); // ===> Param
+                    for (const string& doctorID : doctorIDs) {
+                        cout << "Appointment ID: " << doctorID << endl;
+                    }
+                }
+                else if (tName.rfind("doctor", 0) == 0) {
+                    // DO Primary Index ON Doctor ID
+                    printDoctorInfo(condition);
+                }
                 else {
-                    cout << "No doctors found with name: " << name << endl;
+                    cout << "Table Not Exist!" << endl;
                 }
             }
             else {
-                cout << "Invalid query format or unsupported attribute." << endl;
+                cout << "INVALID INDEXING FORM!" << endl;
             }
         }
         else {
-            cout << "Invalid query format!" << endl;
+            cout << "INVALID QUERY FORMAT!" << endl;
         }
     }
 

@@ -1,1 +1,3 @@
 joe 0
+mazen 2
+omar 1
