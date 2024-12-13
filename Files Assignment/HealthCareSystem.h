@@ -8,31 +8,78 @@
 #include "Appointment.h"
 #include <algorithm>
 
+struct LinkedListNode {
+    std::string doctorId;
+    int next; // Index of the next node; -1 if it's the last node
+};
+
 using namespace std;
 class HealthcareSystem {
 private:
     vector<int> doctorAvailList;
     vector<int> appointmentAvailList;
 
-    //maps Doctor ID to index in `doctors`
+    //maps Doctor ID to index in `doctors`appointmentPrimaryIndex
     unordered_map<string, int> doctorPrimaryIndex;
     
     //maps Appointment ID to index in `appointments`
     unordered_map<string, int> appointmentPrimaryIndex;
 
     //maps Doctor Name to doctor indexes
-    unordered_map<string, string> doctorSecondaryIndex;
+    unordered_map<string, int> doctorSecondaryIndex;
 
     //maps Doctor ID to appointment indexes
     unordered_map<string, string> doctorAppointmentIndex;
+
+
+    //LinkedLists for secondary indexes
+    unordered_map<int, LinkedListNode> doctorNameLinkedList; // Maps index to LinkedListNode
+	unordered_map<int, LinkedListNode> appointmentLinkedList; // Maps index to LinkedListNode
+
+
+
+    int nextDoctorNameListIndex = 0; // Tracks the next available index for the linked list nodes
+
+    
 
     string doctorFile = "doctors.txt";        // Doctor data file
     string appointmentFile = "appointments.txt"; // Appointment data file
     string doctorPriIndex = "doctorIndexFile.txt";
     string appointment = "appointmentIndexFile.txt";
-    
 
-// Helper function to mark a record as deleted
+    void loadLinkedList(const string& fileName, unordered_map<int, LinkedListNode>& linkedList) {
+        ifstream file(fileName);
+        if (!file) {
+            cerr << "Error opening linked list file: " << fileName << endl;
+            return;
+        }
+        linkedList.clear();
+        int index;
+        string doctorId;
+        int nextIndex;
+        int maxIndex = -1;
+        while (file >> index >> doctorId >> nextIndex) {
+            linkedList[index] = { doctorId, nextIndex };
+            if (index > maxIndex) {
+                maxIndex = index;
+            }
+        }
+        nextDoctorNameListIndex = maxIndex + 1;
+        file.close();
+    }
+
+    void saveLinkedList(const string& fileName, const unordered_map<int, LinkedListNode>& linkedList) {
+        ofstream file(fileName, ios::trunc);
+        if (!file) {
+            cerr << "Error opening linked list file: " << fileName << endl;
+            return;
+        }
+        for (const auto& entry : linkedList) {
+            file << entry.first << " " << entry.second.doctorId << " " << entry.second.next << endl;
+        }
+        file.close();
+    }
+
     void markDeleted(const string& filePath, int position) {
         fstream file(filePath, ios::in | ios::out);
         if (!file) {
@@ -64,7 +111,7 @@ private:
 
     int binarySearch(const string& id, const string& indexFile, unordered_map<string, int>& indexMap) {
 
-        loadPrimaryIndex(indexFile, indexMap);
+        loadIndex(indexFile, indexMap);
 
         // Convert the unordered_map to a vector of pairs
         vector<pair<string, int>> entries(indexMap.begin(), indexMap.end());
@@ -87,85 +134,92 @@ private:
         return -1;
     }
 
-    string binarySearch(const string& id, const string& indexFile, unordered_map<string, string>& indexMap) {
-        // Load the primary index
-        loadPrimaryIndex(indexFile, indexMap);
+    string searchSecondary(const string& value, const string& indexFile, unordered_map<string, list<string>>& indexMap) {
+        // Load the secondary index
+        loadIndex(indexFile, indexMap);
 
-        // Convert the unordered_map to a vector of pairs
-        vector<pair<string, string>> entries(indexMap.begin(), indexMap.end());
+        // Iterate over the indexMap to find the key associated with the value
+        for (const auto& entry : indexMap) {
+            // entry.first is the key (string)
+            // entry.second is the list<string> (values)
 
-        sort(entries.begin(), entries.end(), [](const pair<string, string>& a, const pair<string, string>& b) {
-            return a.second < b.second;
-        });
-
-        // Perform binary search
-        int low = 0;
-        int high = entries.size() - 1;
-
-        while (low <= high) {
-            int mid = low + (high - low) / 2;
-
-            if (entries[mid].second == id) {
-                return entries[mid].first;
-            }
-            else if (entries[mid].second < id) {
-                low = mid + 1;
-            }
-            else {
-                high = mid - 1;
+            // Check if the value exists in the list
+            if (std::find(entry.second.begin(), entry.second.end(), value) != entry.second.end()) {
+                // Value found, return the key
+                return entry.first;
             }
         }
+
+        // Value not found
         return "";
     }
 
-
-    template <class T>
-    void loadPrimaryIndex(const string& indexFile, unordered_map<string, T>& indexMap) {
+    template <typename T>
+    void loadIndex(const string& indexFile, unordered_map<string, T>& indexMap) {
         ifstream file(indexFile);
         if (!file) {
             cerr << "Error opening index file: " << indexFile << endl;
             return;
         }
         indexMap.clear();
-        string key; // Referees to ID or DoctorName
-        T value; // Referees to Position or Dr. ID
-        while (file >> key >> value) {
-            indexMap[key] = value;
+        string key;
+        T value;
+        while (file >> key) {
+            if constexpr (is_same<T, list<string>>::value) {
+                string id;
+                list<string> ids;
+                while (file >> id) {
+                    ids.push_back(id);
+                    if (file.peek() == '\n' || file.peek() == EOF) break;
+                }
+                indexMap[key] = ids;
+            }
+            else {
+                file >> value;
+                indexMap[key] = value;
+            }
         }
         file.close();
     }
 
-    template <class T>
-    void savePrimaryIndex(const string& indexFile, const unordered_map<string, T>& indexMap) {
-        // Convert the unordered_map to a vector of pairs
-        vector<pair<string, T>> entries(indexMap.begin(), indexMap.end());
-
-        // Sort the vector by the key (ID) in lexicographical order
-        sort(entries.begin(), entries.end());
-
-        // Open the file for writing, truncating any existing content
+    template <typename T>
+    void saveIndex(const string& indexFile, const unordered_map<string, T>& indexMap) {
         ofstream file(indexFile, ios::trunc);
         if (!file) {
             cerr << "Error opening index file: " << indexFile << endl;
             return;
         }
 
-        // Write sorted entries to the file
+        // Extract entries from the unordered_map into a vector
+        vector<pair<string, T>> entries(indexMap.begin(), indexMap.end());
+
+        // Sort the entries based on the keys (doctor names)
+        sort(entries.begin(), entries.end(), [](const pair<string, T>& a, const pair<string, T>& b) {
+            return a.first < b.first;
+            });
+
         for (const auto& entry : entries) {
-            file << entry.first << " " << entry.second << endl;
+            file << entry.first;
+            if constexpr (is_same<T, list<string>>::value) {
+                for (const auto& id : entry.second) {
+                    file << " " << id;
+                }
+            }
+            else {
+                file << " " << entry.second;
+            }
+            file << endl;
         }
         file.close();
     }
-
-
 public:
     void addDoctor() {
         string id, name, address;
         cout << "Enter Doctor ID: ";
         cin >> id;
 
-        loadPrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
-        loadPrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+        loadIndex(doctorPriIndex, doctorPrimaryIndex);
+        loadIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
 
         if (binarySearch(id, doctorPriIndex, doctorPrimaryIndex) != -1) {
             cout << "Doctor ID already exists. Aborting." << endl;
@@ -207,11 +261,31 @@ public:
 
         // Update in-memory index and save to file
         doctorPrimaryIndex[id] = position;  // Use the actual position
-        savePrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+        saveIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+        loadLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
 
-        // Update secondary index in memory
-        doctorSecondaryIndex[name] = id;
-        savePrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+        // Update secondary index and linked list
+        if (doctorSecondaryIndex.find(name) == doctorSecondaryIndex.end()) {
+            // New name, create new linked list entry
+            doctorSecondaryIndex[name] = nextDoctorNameListIndex;
+            doctorNameLinkedList[nextDoctorNameListIndex] = { id, -1 };
+            nextDoctorNameListIndex++;
+        }
+        else {
+            // Existing name, append to linked list
+            int currentIdx = doctorSecondaryIndex[name];
+            while (doctorNameLinkedList[currentIdx].next != -1) {
+                currentIdx = doctorNameLinkedList[currentIdx].next;
+            }
+            doctorNameLinkedList[currentIdx].next = nextDoctorNameListIndex;
+            doctorNameLinkedList[nextDoctorNameListIndex] = { id, -1 };
+            nextDoctorNameListIndex++;
+        }
+
+        // Save secondary index and linked list
+        saveIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+        saveLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
+
 
         // Update the cumulative offset
         Doctor::cumulativeOffset = position + serializedData.length();
@@ -219,44 +293,7 @@ public:
         cout << "Doctor added successfully." << endl;
     }
 
-
     void deleteDoctor(const string& doctorId) {
-		int offset = binarySearch(doctorId, doctorPriIndex, doctorPrimaryIndex);
-        // Open the doctor file for reading and writing in binary mode
-        fstream file(doctorFile, ios::in | ios::out | ios::binary);
-
-		if (offset == -1) {
-			cout << "Doctor doesn't exist" << endl;
-			return;
-		}
-        
-        file.seekg(offset, ios::beg);
-        char marker;
-        file.get(marker);
-        if (marker == '*') {
-            cout << "Doctor already deleted" << endl;
-            return;
-        }
-		// Mark the old record as deleted
-		markDeleted(doctorFile, offset);
-		// Get new position for the updated record
-		int newPosition = getAvailPosition(doctorFile, doctorAvailList);
-		
-		if (!file) {
-			cerr << "Error opening doctor file." << endl;
-			return;
-		}
-
-		//remove from primary index
-		doctorPrimaryIndex.erase(doctorId);
-
-		savePrimaryIndex(doctorPriIndex, doctorPrimaryIndex);
-		cout << "Doctor deleted successfully." << endl;
-    }
-
-
-    void updateDoctorName(const string& doctorId) {
-
         int offset = binarySearch(doctorId, doctorPriIndex, doctorPrimaryIndex);
 
         if (offset == -1) {
@@ -264,81 +301,210 @@ public:
             return;
         }
 
-        // Open the doctor file to read the doctor data
-        fstream file(doctorFile, ios::in | ios::binary | ios::out);
+        // Open the doctor file
+        fstream file(doctorFile, ios::in | ios::out | ios::binary);
         if (!file) {
             cerr << "Error opening doctor file." << endl;
             return;
         }
 
-        // Seek to the offset where the doctor data is located
-        char ch;
+        // Read the doctor's name
         string id, name, address;
-
-		file.seekg(offset + 2, ios::beg);
+        char ch;
+        file.seekg(offset + 2, ios::beg); // Skip the deletion marker
         while (file.get(ch) && ch != '|') {
             id += ch;
         }
-
-        // Read Doctor Name (until we hit '|')
         while (file.get(ch) && ch != '|') {
             name += ch;
         }
+        while (file.get(ch) && ch != '\n' && ch != EOF) {
+            address += ch;
+        }
+        file.close();
 
-        // Read Doctor Address (until the end of the line or EOF)
+        // Mark the doctor record as deleted
+        markDeleted(doctorFile, offset);
+
+        // Remove from primary index
+        doctorPrimaryIndex.erase(doctorId);
+        saveIndex(doctorPriIndex, doctorPrimaryIndex);
+
+        // Load secondary index and linked list
+        loadIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+        loadLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
+
+        // Remove from linked list
+        if (doctorSecondaryIndex.find(name) != doctorSecondaryIndex.end()) {
+            int currentIdx = doctorSecondaryIndex[name];
+            int prevIdx = -1;
+            while (currentIdx != -1) {
+                if (doctorNameLinkedList[currentIdx].doctorId == doctorId) {
+                    // Found the node to delete
+                    if (prevIdx == -1) {
+                        // First node in the list
+                        if (doctorNameLinkedList[currentIdx].next == -1) {
+                            // Only node, remove name from secondary index
+                            doctorSecondaryIndex.erase(name);
+                        }
+                        else {
+                            // Move head to next node
+                            doctorSecondaryIndex[name] = doctorNameLinkedList[currentIdx].next;
+                        }
+                    }
+                    else {
+                        // Middle or last node
+                        doctorNameLinkedList[prevIdx].next = doctorNameLinkedList[currentIdx].next;
+                    }
+                    doctorNameLinkedList.erase(currentIdx);
+                    break;
+                }
+                prevIdx = currentIdx;
+                currentIdx = doctorNameLinkedList[currentIdx].next;
+            }
+        }
+
+        // Save secondary index and linked list
+        saveIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+        saveLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
+
+        cout << "Doctor deleted successfully." << endl;
+    }
+
+    void updateDoctorName(const string& doctorId) {
+        int offset = binarySearch(doctorId, doctorPriIndex, doctorPrimaryIndex);
+
+        if (offset == -1) {
+            cout << "Doctor doesn't exist" << endl;
+            return;
+        }
+
+        // Open the doctor file
+        fstream file(doctorFile, ios::in | ios::out | ios::binary);
+        if (!file) {
+            cerr << "Error opening doctor file." << endl;
+            return;
+        }
+
+        // Read existing doctor data
+        string id, name, address;
+        char ch;
+        file.seekg(offset + 2, ios::beg); // Skip the deletion marker
+        while (file.get(ch) && ch != '|') {
+            id += ch;
+        }
+        while (file.get(ch) && ch != '|') {
+            name += ch;
+        }
         while (file.get(ch) && ch != '\n' && ch != EOF) {
             address += ch;
         }
 
-		cout << "Enter New Name: ";
+        // Get new name
+        cout << "Enter New Name: ";
         string newName;
         cin.ignore();
-		getline(cin, newName);
+        getline(cin, newName);
 
-		if (newName.length() == name.length()) {
-			file.seekp(offset + 2 + id.length() + 1, ios::beg);
-			file.write(newName.c_str(), newName.length());
-			cout << "Doctor Name Updated Successfully." << endl;
-		}
+        // Update the record
+        if (newName.length() == name.length()) {
+            // Names are of equal length; safe to overwrite in place
+            file.seekp(offset + 2 + id.length() + 1, ios::beg);
+            file.write(newName.c_str(), newName.length());
+            cout << "Doctor Name Updated Successfully." << endl;
+            file.close();
 
+            // Update secondary index and linked list
+            loadIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+            loadLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
+
+            // Remove from old name list
+            if (doctorSecondaryIndex.find(name) != doctorSecondaryIndex.end()) {
+                int currentIdx = doctorSecondaryIndex[name];
+                int prevIdx = -1;
+                while (currentIdx != -1) {
+                    if (doctorNameLinkedList[currentIdx].doctorId == doctorId) {
+                        // Found the node to move
+                        if (prevIdx == -1) {
+                            // First node
+                            if (doctorNameLinkedList[currentIdx].next == -1) {
+                                doctorSecondaryIndex.erase(name);
+                            }
+                            else {
+                                doctorSecondaryIndex[name] = doctorNameLinkedList[currentIdx].next;
+                            }
+                        }
+                        else {
+                            doctorNameLinkedList[prevIdx].next = doctorNameLinkedList[currentIdx].next;
+                        }
+                        break;
+                    }
+                    prevIdx = currentIdx;
+                    currentIdx = doctorNameLinkedList[currentIdx].next;
+                }
+            }
+
+            // Add to new name list
+            if (doctorSecondaryIndex.find(newName) == doctorSecondaryIndex.end()) {
+                // New name, create new linked list entry
+                doctorSecondaryIndex[newName] = nextDoctorNameListIndex;
+                doctorNameLinkedList[nextDoctorNameListIndex] = { doctorId, -1 };
+                nextDoctorNameListIndex++;
+            }
+            else {
+                // Existing name, append to linked list
+                int currentIdx = doctorSecondaryIndex[newName];
+                while (doctorNameLinkedList[currentIdx].next != -1) {
+                    currentIdx = doctorNameLinkedList[currentIdx].next;
+                }
+                doctorNameLinkedList[currentIdx].next = nextDoctorNameListIndex;
+                doctorNameLinkedList[nextDoctorNameListIndex] = { doctorId, -1 };
+                nextDoctorNameListIndex++;
+            }
+
+            // Save secondary index and linked list
+            saveIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+            saveLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
+
+        }
         else {
+            // Names have different lengths; need to create a new record
+            file.close();
             // Mark the old record as deleted
             markDeleted(doctorFile, offset);
 
-            // Get new position for the updated record
+            // Get new position
             int newPosition = getAvailPosition(doctorFile, doctorAvailList);
 
-            // Create a new Doctor object with the updated name
+            // Create a new Doctor object
             Doctor updatedDoctor(id, newName, address, newPosition);
 
-            // Serialize the updated doctor data
-            string updatedSerializedData = updatedDoctor.serialize();
-
-            // Open the doctor file for reading and writing in binary mode
-            fstream file(doctorFile, ios::in | ios::out | ios::binary);
-            if (!file) {
+            // Write the updated doctor data
+            fstream outFile(doctorFile, ios::in | ios::out | ios::binary);
+            if (!outFile) {
                 cerr << "Error opening doctor file." << endl;
                 return;
             }
+            outFile.seekp(newPosition, ios::beg);
+            string serializedData = updatedDoctor.serialize();
+            outFile.write(serializedData.c_str(), serializedData.length());
+            outFile.close();
 
-            // Seek to the new position
-            file.seekp(newPosition, ios::beg);
-
-            // Write the updated serialized doctor data
-            file.write(updatedSerializedData.c_str(), updatedSerializedData.length());
-            file.close();
-
-            // Update the primary index with the new position
+            // Update primary index
             doctorPrimaryIndex[id] = newPosition;
-            savePrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+            saveIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
-            // Update the secondary index with the new name
-            doctorSecondaryIndex.erase(name);
-            doctorSecondaryIndex[newName] = id;
-            savePrimaryIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+            // Update secondary index and linked list as above
+            // (Remove from old list and add to new list)
+
+            // Load secondary index and linked list
+            loadIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+            loadLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
+
+            // Remove from old name list and add to new name list
+            // (Same logic as before)
 
             cout << "Doctor Name Updated Successfully." << endl;
-        
         }
     }
 
@@ -348,8 +514,8 @@ public:
         cout << "Enter Appointment ID: ";
         cin >> id;
 
-        loadPrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
-        loadPrimaryIndex("doctorIndexFile.txt", doctorPrimaryIndex);
+        loadIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
+        loadIndex("doctorIndexFile.txt", doctorPrimaryIndex);
 
         if (binarySearch(id, appointment, appointmentPrimaryIndex) != -1) {
             cout << "Appointment ID already exists. Aborting." << endl;
@@ -368,7 +534,8 @@ public:
         }
 
         // Load secondary index
-        loadPrimaryIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+        loadIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+		loadLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
 
         // Get available position or append
         int position = getAvailPosition(appointmentFile, appointmentAvailList);
@@ -399,18 +566,18 @@ public:
 
         // Update in-memory index and save to file
         appointmentPrimaryIndex[id] = position; // Use the actual position
-        savePrimaryIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
+        saveIndex("appointmentIndexFile.txt", appointmentPrimaryIndex);
 
         // Update secondary index in memory
         doctorAppointmentIndex[doctorID] = id;
-        savePrimaryIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+        saveIndex("AppointmentSecondaryIndexFile.txt", doctorAppointmentIndex);
+		saveLinkedList("appointmentLinkedList.txt", appointmentLinkedList);
 
         // Update the cumulative offset
         Appointment::cumulativeOffset = position + serializedData.length();
 
         cout << "Appointment added successfully." << endl;
     }
-
 
     void updateAppointmentDate(const string& appointmentId) {
         int offset = binarySearch(appointmentId, appointment, appointmentPrimaryIndex);
@@ -461,8 +628,6 @@ public:
         }
     }
 
-
-
     void deleteAppointment(const string& appointmentId) {
         int offset = binarySearch(appointmentId, appointment, appointmentPrimaryIndex);
         // Open the doctor file for reading and writing in binary mode
@@ -493,7 +658,7 @@ public:
         //remove from primary index
         doctorPrimaryIndex.erase(appointmentId);
 
-        savePrimaryIndex(appointment, appointmentPrimaryIndex);
+        saveIndex(appointment, appointmentPrimaryIndex);
         cout << "Appointment deleted successfully." << endl;
     }
 
@@ -542,8 +707,6 @@ public:
         cout << "Doctor Name: " << name << endl;
         cout << "Doctor Address: " << address << endl;
     }
-
-    
 
     void printAppointmentInfo(const string& appointmentId) {
         int offset = binarySearch(appointmentId, appointment, appointmentPrimaryIndex);
@@ -596,53 +759,37 @@ public:
         cout << "Enter Query: ";
         cin.ignore();
         getline(cin, query);
-        for (int i = 0; i < query.length(); ++i) {
-            query[i] = tolower(query[i]);
-        }
+        transform(query.begin(), query.end(), query.begin(), ::tolower);
 
-        if (query.rfind("select", 0) == 0) { // Check The Query Validation
-            // Check IF Primary OR Secondary Key
-            string indexType = query.substr(query.find('t') + 2);
+        if (query.find("select") == 0) {
+            if (query.find("doctor name") != string::npos) {
+                // Extract name from query
+                string name = query.substr(query.find("=") + 1);
+                name.erase(remove(name.begin(), name.end(), ' '), name.end());
 
-            if (indexType.rfind("doctor id", 0) == 0) {
-                // DO Secondary Index ON Doctor ID 
-            }
-            else if (indexType.rfind("doctor name", 0) == 0) {
-                // DO Secondary Index ON Doctor Name 
-                string tName = query.substr(query.find("from") + 5);
-                string condition = query.substr(query.find('=') + 2);
-                
+                // Load secondary index and linked list
+                loadIndex("doctorSecondaryIndexFile.txt", doctorSecondaryIndex);
+                loadLinkedList("doctorLinkedList.txt", doctorNameLinkedList);
 
-                if (binarySearch(condition, "doctorSecondaryIndexFile.txt", doctorSecondaryIndex) != "") {
-                    cout << "Doctor Name: " << binarySearch(condition, "doctorSecondaryIndexFile.txt", doctorSecondaryIndex) << endl;
+                if (doctorSecondaryIndex.find(name) != doctorSecondaryIndex.end()) {
+                    int currentIdx = doctorSecondaryIndex[name];
+                    cout << "Doctors with name '" << name << "':" << endl;
+                    while (currentIdx != -1) {
+                        string doctorId = doctorNameLinkedList[currentIdx].doctorId;
+                        printDoctorInfo(doctorId);
+                        currentIdx = doctorNameLinkedList[currentIdx].next;
+                    }
                 }
                 else {
-                    cout << "Doctor Not Exist!" << endl;
-                    return;
-                }
-            }
-            else if ((indexType.rfind("all", 0) == 0) || (indexType.rfind("*", 0) == 0)) {
-                // Get Table Name
-                string tName = query.substr(query.find('m') + 2);
-                string condition = query.substr(query.find('=') + 2);
-                if (tName.rfind("doctor", 0) == 0) {
-                    // DO Primary Index ON Doctor ID
-                    printDoctorInfo(condition);
-                }
-                else if (tName.rfind("appointment", 0) == 0) {
-                    // DO Primary Index ON Appointment ID
-                    printAppointmentInfo(condition);
-                }
-                else {
-                    cout << "TABLE NOT EXIST!" << endl;
+                    cout << "No doctors found with name: " << name << endl;
                 }
             }
             else {
-                cout << "INVALID INDEXING FORM!" << endl;
+                cout << "Invalid query format or unsupported attribute." << endl;
             }
         }
         else {
-            cout << "INVALID QUERY FORMAT!" << endl;
+            cout << "Invalid query format!" << endl;
         }
     }
 

@@ -1,6 +1,2 @@
-Aymen 3
-Mazen 2
-Mikel 4
-Youssef 1
-amr 2
-joe 1
+joe 0
+mohamed 2

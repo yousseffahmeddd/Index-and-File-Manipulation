@@ -15,6 +15,8 @@ public:
         : id(id), name(name), address(address), offset(offset) {
     }
 
+
+
     void setDoctorName(string name) {
 		this->name = name;
     }
